@@ -1,0 +1,37 @@
+# Veda pinned toolchain manifest.
+# Upgrades are dedicated PRs with full differential-test reruns
+# (non-negotiable rule 6).
+#
+# The development sandbox cannot reach llvm/circt or leanprover/lean4
+# directly; artifacts are mirrored to this fork's `veda-tools-v1` release
+# by .github/workflows/veda-bootstrap-tools.yml. CI on GitHub runners
+# downloads from the upstream sources directly.
+
+[lean]
+toolchain = "leanprover/lean4:v4.31.0"
+linux_tarball_sha256 = "07a633cc8d9151cbc08825ea4cdda50d4b02a2c9cb852c0131b13046f49cad7f"
+
+[circt]
+release_tag = "firtool-1.151.0"
+# static tools: circt-verilog, circt-opt, circt-translate, circt-synth, firtool
+firrtl_bin_linux_x64_sha256 = "10bf9b135a65e5d93fb0555e967eac4258400ee629731ba68a69be6b7f9781ce"
+# shared full install: arcilator, circt-bmc, circt-lec + lib/
+circt_full_shared_linux_x64_sha256 = "dde442dcd0ada92e6f7db26f4744667471f7be61d10f2876297efb435fc9a5ec"
+
+[verilator]
+version = "5.020-1"
+source = "ubuntu-24.04 apt"
+
+[z3]
+version = "4.8.12"
+source = "ubuntu-24.04 apt"
+
+[lspec]
+commit = "d3c15b93a1dd4e7c8d5c0c3825c9555737e55c3e"
+upstream = "https://github.com/argumentcomputer/LSpec"
+vendored = "veda/vendor/LSpec (patched for Lean v4.31.0, see LSpec/LSpec.lean)"
+sha256 = "2fb28688c3c9acbc3f83f8195c7d5eb3b95c23403b1a17a65d500f9fdf04af24"
+
+[mirror]
+release = "https://github.com/tibrewalrachit/circt/releases/tag/veda-tools-v1"
+workflow = ".github/workflows/veda-bootstrap-tools.yml"
