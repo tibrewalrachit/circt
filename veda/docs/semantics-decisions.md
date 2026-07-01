@@ -63,7 +63,40 @@ build failure. Trust implications documented in architecture.md. If a
 future toolchain offers kernel-only LRAT checking at acceptable cost, we
 switch and delete this entry.
 
-## 7. Two-state values only at the hw/comb/seq level (M0)
+## 7. Sequence matching is length-indexed; fusion requires non-empty (M1)
+
+`SMatch t s i len` (Veda/Ltl/Semantics.lean) is tight satisfaction over
+`len` ticks. `concat` is CIRCT's `##0` fusion: RHS starts on the LHS's
+end tick, `len + 1 = la + lb`, and both operands must match non-emptily
+(IEEE 1800: fusion with an empty match fails). Empty matches arise only
+from `rep _ 0 _`. Antecedent matches of length 0 do not trigger
+`ltl.implication`. Open sub-question for M3 differential testing: CIRCT
+desugars `a ##1 b` as `concat(a, delay(b,1,0))`, which under these rules
+drops IEEE's `(empty ##n s) ≡ ##(n-1) s` allowance when `a` can match
+empty — check what circt-bmc does with e.g. `a[*0:1] ##1 b`.
+
+## 8. Sequences used as properties are strong (M1, to validate in M3)
+
+`sat t (.seq s) i = ∃ len, SMatch t s i len`. Weak vs. strong only
+diverges for sequences with unbounded delay/repeat on infinite traces
+(weak(##[0:$]b) is vacuously true; strong requires a witness). SVA
+defaults to `weak` under `assert property`; whether circt-bmc's
+finite-unrolling verdicts correspond to weak or strong there is an M3
+differential question. Until resolved, imported assertions containing
+*unbounded* sequence operators must not be marked `Proven` against this
+semantics without a note; bounded sequences are unaffected (weak =
+strong).
+
+## 9. `assert property (p)` imports as `always p`; clocks (M1)
+
+Per IEEE 1800 §16.5, a concurrent assertion starts an evaluation attempt
+at every clock tick; `holds` evaluates at tick 0 only, so the importer
+wraps assertion bodies in `Prop'.always`. `ltl.clock` on single-clock
+designs is a no-op wrapper: the importer must check the clock/edge is
+the design's sampling clock and discharge it, else emit `Uninterpreted`.
+Validation: M3 verdict agreement with circt-bmc at depths 1..k.
+
+## 10. Two-state values only at the hw/comb/seq level (M0)
 
 Veda imports the post-`MooreToCore` `hw`/`comb`/`seq` IR, which is
 two-state (`iN`). Four-state `moore.lN` values never reach the importer

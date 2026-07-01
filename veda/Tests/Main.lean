@@ -1,5 +1,6 @@
 import LSpec
 import Veda
+import Tests.Ltl
 
 /-!
 LSpec sanity suites for the Veda core. These exercise the *executable*
@@ -47,4 +48,5 @@ def suite : TestSeq :=
 end Tests
 
 def main : IO UInt32 :=
-  LSpec.lspecIO (.ofList [("Veda.Core", [Tests.suite])]) []
+  LSpec.lspecIO
+    (.ofList [("Veda.Core", [Tests.suite]), ("Veda.Ltl", [Tests.Ltl.suite])]) []

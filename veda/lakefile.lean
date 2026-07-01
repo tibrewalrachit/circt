@@ -13,6 +13,10 @@ require LSpec from "vendor" / "LSpec"
 @[default_target]
 lean_lib Veda
 
+/-- Shared test-suite modules (imported by the `tests` executable). -/
+lean_lib TestSuites where
+  roots := #[`Tests.Ltl]
+
 /-- LSpec test suites. -/
 lean_exe tests where
   root := `Tests.Main
