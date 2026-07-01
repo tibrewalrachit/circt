@@ -11,10 +11,16 @@
 # (see veda/toolchain.lock) on PATH.
 set -euo pipefail
 
-src=$1
-outdir=${2:-$(dirname "$src")}
+src=$(realpath "$1")
+outdir=$(realpath "${2:-$(dirname "$src")}")
 name=$(basename "$src" .sv)
 
-circt-verilog --ir-hw "$src" -o "$outdir/$name.hw.mlir"
-circt-opt --mlir-print-op-generic "$outdir/$name.hw.mlir" -o "$outdir/$name.generic.mlir"
+# Run from the output directory on basenames so that source locations
+# embedded in the IR (e.g. hw.module result_locs) are stable regardless of
+# the caller's working directory — the generic MLIR is checked into git and
+# CI diffs it against a regeneration.
+cd "$outdir"
+cp -f "$src" "./$name.sv" 2>/dev/null || true
+circt-verilog --ir-hw "$name.sv" -o "$name.hw.mlir"
+circt-opt --mlir-print-op-generic "$name.hw.mlir" -o "$name.generic.mlir"
 echo "wrote $outdir/$name.hw.mlir and $outdir/$name.generic.mlir"
