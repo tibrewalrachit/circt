@@ -15,7 +15,7 @@ lean_lib Veda
 
 /-- Shared test-suite modules (imported by the `tests` executable). -/
 lean_lib TestSuites where
-  roots := #[`Tests.Ltl]
+  roots := #[`Tests.Ltl, `Tests.Import]
 
 /-- LSpec test suites. -/
 lean_exe tests where

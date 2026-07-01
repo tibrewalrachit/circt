@@ -1,6 +1,7 @@
 import LSpec
 import Veda
 import Tests.Ltl
+import Tests.Import
 
 /-!
 LSpec sanity suites for the Veda core. These exercise the *executable*
@@ -47,6 +48,9 @@ def suite : TestSeq :=
 
 end Tests
 
-def main : IO UInt32 :=
+def main : IO UInt32 := do
+  let counterMlir ← IO.FS.readFile "designs/counter/counter.generic.mlir"
   LSpec.lspecIO
-    (.ofList [("Veda.Core", [Tests.suite]), ("Veda.Ltl", [Tests.Ltl.suite])]) []
+    (.ofList [("Veda.Core", [Tests.suite]),
+              ("Veda.Ltl", [Tests.Ltl.suite]),
+              ("Veda.Import", [Tests.Import.suite counterMlir])]) []
