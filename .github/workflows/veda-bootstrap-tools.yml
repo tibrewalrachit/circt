@@ -1,0 +1,123 @@
+name: Veda Bootstrap Tools
+
+# Mirrors external toolchain artifacts (CIRCT release binaries, Lean 4
+# toolchain, LSpec sources) into a release on this fork, so that the Veda
+# development sandbox — whose egress policy only allows this repository —
+# can download them.
+#
+# Side effect (documented in veda/docs/log/0001.md): this workflow disables
+# the fork's release-triggered `uploadReleaseArtifacts.yml` workflow before
+# creating the mirror release. Otherwise creating any release on this fork
+# would kick off CIRCT's full multi-platform release build matrix and upload
+# unrelated assets into the mirror release. Re-enable with:
+#   gh workflow enable uploadReleaseArtifacts.yml
+
+on:
+  workflow_dispatch:
+    inputs:
+      circt_tag:
+        description: "llvm/circt release tag to mirror (or 'latest')"
+        default: latest
+        type: string
+      lean_version:
+        description: "Lean 4 toolchain version to mirror"
+        default: v4.31.0
+        type: string
+  push:
+    branches:
+      - "claude/veda-**"
+    paths:
+      - .github/workflows/veda-bootstrap-tools.yml
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  RELEASE_TAG: veda-tools-v1
+
+jobs:
+  mirror:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Disable release-triggered workflows on this fork
+        run: |
+          gh workflow disable uploadReleaseArtifacts.yml -R "${{ github.repository }}" || true
+
+      - name: Resolve CIRCT release tag
+        id: tag
+        run: |
+          TAG="${{ inputs.circt_tag || 'latest' }}"
+          if [ "$TAG" = "latest" ]; then
+            TAG=$(gh api repos/llvm/circt/releases/latest --jq .tag_name)
+          fi
+          echo "Resolved CIRCT release tag: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Assets available in llvm/circt@$TAG:"
+          gh api "repos/llvm/circt/releases/tags/$TAG" --jq '.assets[].name'
+
+      - name: Download CIRCT release assets
+        run: |
+          mkdir -p mirror
+          cd mirror
+          gh release download "${{ steps.tag.outputs.tag }}" -R llvm/circt \
+            -p 'firrtl-bin-linux-x64.tar.gz' || echo "WARNING: no firrtl-bin-linux-x64.tar.gz"
+          gh release download "${{ steps.tag.outputs.tag }}" -R llvm/circt \
+            -p 'circt-full-shared-linux-x64.tar.gz' || echo "WARNING: no circt-full-shared-linux-x64.tar.gz"
+          ls -la
+
+      - name: Inspect archive contents (tool inventory)
+        run: |
+          cd mirror
+          for f in *.tar.gz; do
+            echo "===== $f: bin/ contents ====="
+            tar -tzf "$f" | grep -E '(^|/)bin/' | sort || true
+          done
+
+      - name: Download Lean toolchain
+        run: |
+          V="${{ inputs.lean_version || 'v4.31.0' }}"
+          cd mirror
+          curl -fsSL --retry 3 -o "lean-${V#v}-linux.tar.zst" \
+            "https://github.com/leanprover/lean4/releases/download/$V/lean-${V#v}-linux.tar.zst"
+          ls -la
+
+      - name: Bundle LSpec sources
+        run: |
+          git clone --depth 1 https://github.com/argumentcomputer/LSpec.git lspec
+          LSPEC_COMMIT=$(git -C lspec rev-parse HEAD)
+          echo "LSpec commit: $LSPEC_COMMIT"
+          echo "$LSPEC_COMMIT" > lspec/LSPEC_COMMIT
+          tar -C lspec --exclude=.git -czf mirror/lspec-src.tar.gz .
+
+      - name: Write manifest and checksums
+        run: |
+          cd mirror
+          {
+            echo "circt_release_tag=${{ steps.tag.outputs.tag }}"
+            echo "lean_version=${{ inputs.lean_version || 'v4.31.0' }}"
+            echo "mirrored_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "mirror_workflow_run=${{ github.run_id }}"
+          } > MANIFEST.txt
+          sha256sum *.tar.gz *.tar.zst >> MANIFEST.txt
+          cat MANIFEST.txt
+
+      - name: Create or update mirror release on this fork
+        run: |
+          if ! gh release view "$RELEASE_TAG" -R "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" -R "${{ github.repository }}" \
+              --target "${{ github.sha }}" \
+              --title "Veda toolchain mirror" \
+              --notes "Mirrored toolchain artifacts for the Veda development sandbox. CIRCT release: ${{ steps.tag.outputs.tag }}. See MANIFEST.txt asset for checksums."
+          fi
+          gh release upload "$RELEASE_TAG" -R "${{ github.repository }}" --clobber mirror/*
+
+      - name: Cancel any release-triggered runs (safety net)
+        run: |
+          sleep 20
+          for st in queued in_progress; do
+            gh run list -R "${{ github.repository }}" --event release --status "$st" \
+              --json databaseId --jq '.[].databaseId' \
+              | xargs -r -n1 gh run cancel -R "${{ github.repository }}" || true
+          done
