@@ -1,0 +1,5 @@
+/build
+/lake-packages
+.lake/
+/result*
+.direnv/

@@ -1,0 +1,106 @@
+name: Veda CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "claude/veda-**"
+    paths:
+      - "veda/**"
+      - ".github/workflows/veda-ci.yml"
+  pull_request:
+    paths:
+      - "veda/**"
+      - ".github/workflows/veda-ci.yml"
+
+concurrency:
+  group: veda-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Lake build (includes the #axiom_gate over every Veda declaration —
+  # a nonstandard axiom or `sorry` is a red build) + LSpec suites.
+  lean:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: veda
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install elan (pinned toolchain from veda/lean-toolchain)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain "$(cat lean-toolchain)"
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Build library + axiom gate
+        run: lake build
+
+      - name: Run LSpec suites
+        run: lake exe tests
+
+  # Three-way differential harness: Lean executable semantics (imported
+  # design) vs Verilator vs arcilator on shared random stimulus. 2000
+  # steps in CI (the arcilator JIT dominates runtime); 10k-step runs are
+  # done locally per milestone (see docs/log/).
+  differential:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        working-directory: veda
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install elan (pinned toolchain from veda/lean-toolchain)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain "$(cat lean-toolchain)"
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Install Verilator
+        run: sudo apt-get update -q && sudo apt-get install -y -q verilator
+
+      - name: Install pinned CIRCT release tools (arcilator)
+        run: |
+          TAG=$(sed -n 's/^release_tag = "\(.*\)"/\1/p' toolchain.lock)
+          gh release download "$TAG" -R llvm/circt -p 'circt-full-shared-linux-x64.tar.gz'
+          echo "$(sed -n 's/^circt_full_shared_linux_x64_sha256 = "\(.*\)"/\1/p' toolchain.lock)  circt-full-shared-linux-x64.tar.gz" | sha256sum -c -
+          mkdir -p "$HOME/circt"
+          tar -xzf circt-full-shared-linux-x64.tar.gz -C "$HOME/circt" --strip-components=1
+          rm circt-full-shared-linux-x64.tar.gz
+          echo "$HOME/circt/bin" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=$HOME/circt/lib" >> "$GITHUB_ENV"
+
+      - name: Run three-way differential harness
+        run: harness/run_diff.sh 2000
+
+  # Re-run the SystemVerilog -> MLIR import with the pinned CIRCT release
+  # and fail if the checked-in MLIR in veda/designs/ has drifted.
+  import-roundtrip:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install pinned CIRCT release tools
+        run: |
+          TAG=$(sed -n 's/^release_tag = "\(.*\)"/\1/p' veda/toolchain.lock)
+          echo "Pinned CIRCT release: $TAG"
+          gh release download "$TAG" -R llvm/circt -p 'firrtl-bin-linux-x64.tar.gz'
+          echo "$(sed -n 's/^firrtl_bin_linux_x64_sha256 = "\(.*\)"/\1/p' veda/toolchain.lock)  firrtl-bin-linux-x64.tar.gz" | sha256sum -c -
+          mkdir -p "$HOME/circt"
+          tar -xzf firrtl-bin-linux-x64.tar.gz -C "$HOME/circt" --strip-components=1
+          echo "$HOME/circt/bin" >> "$GITHUB_PATH"
+
+      - name: Re-import all designs
+        run: |
+          for sv in veda/designs/*/*.sv; do
+            veda/bridge/import.sh "$sv"
+          done
+
+      - name: Check for drift against checked-in MLIR
+        run: git diff --exit-code -- veda/designs

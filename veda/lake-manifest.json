@@ -1,0 +1,13 @@
+{"version": "1.2.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "LSpec",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "vendor/LSpec",
+   "configFile": "lakefile.toml"}],
+ "name": "veda",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}
