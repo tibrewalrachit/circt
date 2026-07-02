@@ -21,6 +21,11 @@ lean_lib TestSuites where
 lean_exe tests where
   root := `Tests.Main
 
+/-- Differential-harness driver (stimulus generation, Lean-side
+simulation of imported designs, arcilator testbench emission). -/
+lean_exe harness where
+  root := `Harness.Main
+
 /-- Axiom gate: importing this module runs `#axiom_gate` over every theorem
 in the `Veda` namespace and fails elaboration if any theorem depends on
 axioms beyond propext, Classical.choice, Quot.sound. Built as part of CI. -/

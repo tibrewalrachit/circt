@@ -8,4 +8,5 @@ import Veda.Ltl.Eval
 import Veda.Import.Netlist
 import Veda.Import.Parser
 import Veda.Import.Elab
+import Veda.Designs.Counter
 import Veda.Ledger.Status

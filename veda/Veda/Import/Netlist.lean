@@ -40,10 +40,12 @@ at the value's own width, where it reduces to the identity. -/
 def castTo (w : Nat) : Val → BitVec w
   | ⟨w', v⟩ => if h : w' = w then h ▸ v else BitVec.ofNat w v.toNat
 
-def beq : Val → Val → Bool
-  | ⟨w1, v1⟩, ⟨w2, v2⟩ => if h : w1 = w2 then (h ▸ v1) == v2 else false
+instance : DecidableEq Val :=
+  inferInstanceAs (DecidableEq (Sigma (fun w : Nat => BitVec w)))
 
-instance : BEq Val := ⟨beq⟩
+instance instBEq : BEq Val := instBEqOfDecidableEq
+
+instance : LawfulBEq Val := inferInstance
 
 instance : Repr Val := ⟨fun v _ => s!"{v.2.toNat}#{v.1}"⟩
 
@@ -55,7 +57,7 @@ inductive CRef where
   | input (idx : Nat)
   | reg (idx : Nat)
   | node (idx : Nat)
-  deriving Repr, DecidableEq
+  deriving Repr, DecidableEq, Inhabited
 
 /-- Variadic combinational operators (`comb.add` etc. take N operands). -/
 inductive VarOp where
@@ -81,14 +83,14 @@ inductive CNode where
   width; any property in its cone is `Assumed`, so this value is never
   load-bearing for a `Proven` verdict. -/
   | uninterp (name : String) (w : Nat) (args : List CRef)
-  deriving Repr, Inhabited
+  deriving Repr, Inhabited, DecidableEq
 
 /-- A register: current value is state; `next` is sampled at each tick. -/
 structure Reg where
   name : String
   width : Nat
   next : CRef
-  deriving Repr
+  deriving Repr, DecidableEq
 
 /-- A flat, topologically sorted synchronous netlist. -/
 structure Circuit where
@@ -97,7 +99,7 @@ structure Circuit where
   regs : List Reg
   nodes : List CNode
   outputs : List (CRef × Nat)
-  deriving Repr
+  deriving Repr, DecidableEq
 
 namespace Circuit
 

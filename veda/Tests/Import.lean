@@ -43,6 +43,8 @@ def stimulus (n : Nat) (seed : Nat := 12345) : List (Bool × Bool) :=
     ([], seed) |>.1
 
 def suite (mlirText : String) : TestSeq :=
+  test "embedded counter MLIR matches designs/counter/counter.generic.mlir"
+    (Veda.Designs.counterMlir == mlirText) $
   match importCircuit mlirText with
   | .error e =>
       test s!"counter.generic.mlir imports (error: {e})" false
