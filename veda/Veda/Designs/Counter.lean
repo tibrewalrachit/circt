@@ -55,6 +55,7 @@ def counterMlir : String :=
     "hw.output"(%10) : (i8) -> ()
   }) : () -> ()
 }) : () -> ()
+
 "#
 
 /-- The imported circuit, transcribed from the importer's output. -/
